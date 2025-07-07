@@ -1,15 +1,12 @@
 import { Text, View } from "react-native";
-
+import "./global.css";
+ 
 export default function Index() {
   return (
-    <View
-      style={{
-        flex: 1,
-        justifyContent: "center",
-        alignItems: "center",
-      }}
-    >
-      <Text>lorem ipsum</Text>
+    <View className="flex-1 items-center justify-center bg-white">
+      <Text className="text-3xl font-bold text-blue-500">
+        Welcome to Nativewind!
+      </Text>
     </View>
   );
 }
