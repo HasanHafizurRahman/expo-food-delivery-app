@@ -9,7 +9,11 @@ export default function RootLayout() {
 
   return (
     <>
-      <Stack />
+      <Stack
+      screenOptions={{
+        headerShown: false, // 👈 hides the header everywhere
+      }}
+    />
       <BottomNav isAuth={isAuth} cartCount={cartCount} />
     </>
   );
