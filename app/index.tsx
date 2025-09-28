@@ -1,7 +1,9 @@
+import FeaturedCategories from "@/components/FeaturedCategories";
+import SearchInput from "@/components/SearchInput";
+import { fetchSlidersRN } from "@/utils/getSlider";
 import React, { useEffect, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import HeroCarousel from "../components/HeroCarousel";
-import { fetchSlidersRN } from "../utils/fetcherRN";
 import "./global.css";
 
 export default function Index() {
@@ -36,6 +38,11 @@ export default function Index() {
             <Text className="text-sm text-gray-500">Loading banners...</Text>
           </View>
         )}
+        {/* Search input */}
+        <View className="px-4 mt-3">
+          <SearchInput initialQuery="" initialSuggestions={[]} />
+        </View>
+        <FeaturedCategories />
 
         {/* rest of your homepage */}
         <View className="mt-6">
