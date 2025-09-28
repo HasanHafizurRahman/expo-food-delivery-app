@@ -1,91 +1,91 @@
+import { Platform } from "react-native";
+
 export async function fetcherRN(endpoint: string, options: RequestInit = {}) {
   const base =
-    process.env.EXPO_PUBLIC_API_BASE_URL ||
-    "https://ecom-api.virleaf.com"; 
-
-; // set your base in env for Expo
+    process.env.EXPO_PUBLIC_API_BASE_URL || "https://ecom-api.virleaf.com";
   const url = endpoint.startsWith("http") ? endpoint : `${base}${endpoint}`;
 
-  const controller = new AbortController();
-  const timeoutMs = 5000;
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const timeoutMs = 8000;
 
-  // DEV-only proxy (change to a proxy you prefer)
+  // Dev proxy (override in env if you run a local proxy)
   const DEV_PROXY_PREFIX =
-    process.env.EXPO_PUBLIC_CORS_PROXY || "https://api.allorigins.win/raw?url=";
+    process.env.EXPO_PUBLIC_CORS_PROXY || "http://localhost:3001/proxy?url=";
 
-  const useProxy = typeof __DEV__ !== "undefined" && __DEV__; // only in dev
+  const useProxy = typeof __DEV__ !== "undefined" && __DEV__;
 
-  // helper to do a single fetch
-  const doFetch = async (fetchUrl: string) => {
-    const res = await fetch(fetchUrl, {
-      credentials: "include",
-      signal: controller.signal,
+  const defaultCredentials = options.credentials ?? (Platform.OS === "web" ? undefined : "include");
+
+  const makeFetch = async (fetchUrl: string, signal: AbortSignal) => {
+    const fetchOptions: RequestInit = {
       ...options,
-    });
-    clearTimeout(timeoutId);
+      credentials: defaultCredentials,
+      signal,
+    };
 
+    const res = await fetch(fetchUrl, fetchOptions);
     const contentType = res.headers?.get?.("content-type") ?? "";
-    const isJson = contentType.includes("application/json");
     const text = await res.text();
 
     if (!res.ok) {
-      let errorResponse;
+      let parsed;
       try {
-        errorResponse = JSON.parse(text);
+        parsed = JSON.parse(text);
       } catch {
-        errorResponse = text;
+        parsed = text;
       }
       const error: any = new Error(`API Error: ${res.status} ${res.statusText}`);
       error.status = res.status;
-      error.response = errorResponse;
+      error.response = parsed;
       throw error;
     }
 
-    return isJson ? JSON.parse(text) : text;
+    return contentType.includes("application/json") ? JSON.parse(text) : text;
   };
 
+  // First try direct
+  const controller1 = new AbortController();
+  const tid1 = setTimeout(() => controller1.abort(), timeoutMs);
   try {
-    // Try direct first (same as production)
-    return await doFetch(url);
-  } catch (err: any) {
-    clearTimeout(timeoutId);
+    const result = await makeFetch(url, controller1.signal);
+    clearTimeout(tid1);
+    return result;
+  } catch (err) {
+    clearTimeout(tid1);
 
-    // If in dev, try proxy fallback
+    // If in dev, try proxy fallback (omit credentials when going through proxy)
     if (useProxy) {
       try {
-        console.warn("[fetcherRN] Direct fetch failed; trying dev CORS proxy:", err?.message);
-        const proxiedUrl = `${DEV_PROXY_PREFIX}${encodeURIComponent(url)}`;
-        // Reset controller for second attempt
+        console.warn("[fetcherRN] Direct fetch failed; trying dev CORS proxy:", (err as any)?.message ?? err);
         const controller2 = new AbortController();
-        const timeoutId2 = setTimeout(() => controller2.abort(), timeoutMs);
-        const resText = await fetch(proxiedUrl, {
-          credentials: "include",
-          signal: controller2.signal,
-          ...options,
-        }).then((r) => r.text());
-        clearTimeout(timeoutId2);
+        const tid2 = setTimeout(() => controller2.abort(), timeoutMs * 1.5);
+        const proxiedUrl = `${DEV_PROXY_PREFIX}${encodeURIComponent(url)}`;
 
-        // AllOrigins returns raw body; try to parse JSON
+        const resText = await fetch(proxiedUrl, {
+          // do not forward credentials through public proxy
+          credentials: "omit",
+          signal: controller2.signal,
+        }).then((r) => r.text());
+
+        clearTimeout(tid2);
+
         try {
           return JSON.parse(resText);
         } catch {
           return resText;
         }
       } catch (proxyErr) {
+        clearTimeout(undefined);
         console.error("[fetcherRN] Proxy attempt failed:", proxyErr);
         throw proxyErr;
       }
     }
 
-    // Not dev or proxy disabled: rethrow original error
+    // Not dev or proxy disabled
     throw err;
-  } finally {
-    clearTimeout(timeoutId);
   }
 }
 
-// helper similar to your original
+// helper
 export async function fetchSlidersRN() {
   const data: any = await fetcherRN("/global/sliders");
   const items = data?.items ?? data?.data ?? [];

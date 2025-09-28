@@ -1,7 +1,15 @@
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
-import { Dimensions, FlatList, Text, TouchableOpacity, View } from "react-native";
+import {
+  Dimensions,
+  FlatList,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 type Slide = {
   image: string;
@@ -21,33 +29,45 @@ export default function HeroCarousel({
   const [index, setIndex] = useState(0);
 
   const width = Dimensions.get("window").width;
-  // desired aspect ratio close to original 2.5/1 -> aspectRatio = width/height -> height = width / 2.5
   const height = Math.round(width / 2.5);
 
-  // autoplay
+  // update width on dimension change (optional but useful for rotation)
+  useEffect(() => {
+    const sub = Dimensions.addEventListener?.("change", () => {
+      // force re-render so width/height are recalculated (setIndex no-op)
+      setIndex((i) => i);
+    });
+    return () => sub?.remove?.();
+  }, []);
+
+  // autoplay: use scrollToOffset (more reliable cross-platform)
   useEffect(() => {
     if (!sliders || sliders.length <= 1) return;
-
     const id = setInterval(() => {
       setIndex((prev) => {
         const next = (prev + 1) % sliders.length;
-        // scroll FlatList
-        listRef.current?.scrollToIndex({ index: next, animated: true });
+        // scroll by offset
+        listRef.current?.scrollToOffset({ offset: next * width, animated: true });
         return next;
       });
     }, autoplayDelay);
 
     return () => clearInterval(id);
-  }, [sliders, autoplayDelay]);
+  }, [sliders, autoplayDelay, width]);
 
-  // on manual scroll update index
-  const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
-    if (viewableItems.length > 0) {
-      setIndex(viewableItems[0].index ?? 0);
-    }
-  }).current;
+  // compute index when user finishes a scroll gesture
+  const onMomentumScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const x = e.nativeEvent.contentOffset.x;
+    const newIndex = Math.round(x / width);
+    if (newIndex !== index) setIndex(newIndex);
+  };
 
-  const viewabilityConfig = useRef({ viewAreaCoveragePercentThreshold: 50 }).current;
+  // getItemLayout helps scrollToIndex/scrollToOffset work reliably (and improves perf)
+  const getItemLayout = (_: ArrayLike<Slide> | null | undefined, i: number) => ({
+    length: width,
+    offset: width * i,
+    index: i,
+  });
 
   if (!sliders || sliders.length === 0) return null;
 
@@ -59,22 +79,19 @@ export default function HeroCarousel({
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        keyExtractor={(item, idx) => item.image + idx}
-        onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={viewabilityConfig}
+        keyExtractor={(item, idx) => `${item.image}-${idx}`}
         renderItem={({ item }) => (
           <View style={{ width, height }} className="relative rounded-lg overflow-hidden">
+            {/* Use { uri } for remote images */}
             <Image
-              source={item.image}
+              source={typeof item.image === "string" ? { uri: item.image } : item.image}
               contentFit="cover"
               style={{ width: "100%", height: "100%" }}
-              // placeholder={require("../assets/placeholder.png")}
             />
             <View className="absolute bottom-4 left-4">
               <TouchableOpacity
                 activeOpacity={0.85}
                 onPress={() => {
-                  // navigate to slide url if present
                   if (item.url) router.push(item.url as any);
                 }}
                 className="rounded-full bg-white px-4 py-2"
@@ -85,6 +102,11 @@ export default function HeroCarousel({
             </View>
           </View>
         )}
+        // make scrolling control reliable
+        getItemLayout={getItemLayout}
+        onMomentumScrollEnd={onMomentumScrollEnd}
+        // optional: ensure one-page snapping on web
+        decelerationRate="fast"
       />
 
       {/* Dots indicator */}
@@ -98,7 +120,6 @@ export default function HeroCarousel({
               height: 8,
               borderRadius: 8,
               backgroundColor: i === index ? "#FB7A0A" : "rgba(0,0,0,0.15)",
-              transitionDuration: "200ms",
             }}
           />
         ))}
