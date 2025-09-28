@@ -107,13 +107,13 @@ export default function CategoryCarouselContent({ categories }: { categories: Ca
 
                 <View
                   style={{
-                    backgroundColor: "#FFF7ED",
                     paddingHorizontal: 8,
                     paddingVertical: 4,
                     borderRadius: 999,
                     marginBottom: 6,
                     alignSelf: "center",
                   }}
+                  className="bg-main-primary-3"
                 >
                   <Text style={{ fontSize: 10, fontWeight: "700", color: "#FB7A0A" }}>
                     From {item?.from_price ?? "0"} ৳
